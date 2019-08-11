@@ -1,3 +1,5 @@
 awacs==0.7.2
 troposphere==2.3.1
 boto3==1.9.63
+docopt==0.6.2
+pycurl==7.43.0.3

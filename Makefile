@@ -8,5 +8,5 @@ package:
 		python3 --version
 		python3 -m venv venv
 		./venv/bin/pip install --upgrade pip
-		./venv/bin/pip install -r scripts/requirements.txt
-		./venv/bin/python scripts/aws.py
+		./venv/bin/pip install -r scripts/src/lamda/requirements.txt
+
