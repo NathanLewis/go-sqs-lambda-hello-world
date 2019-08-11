@@ -32,6 +32,14 @@ After making changes to the code and building the zip. Use the following script 
 
 `./update.sh`
 
+
+
+### Publishing To Queue
+
+The following script can be used to test out the functionality.
+
+`python scripts/python/src/helloworld/publish.py`
+
 ### Note
 
 Create EventSourceMapping is not done via cloudformation 
