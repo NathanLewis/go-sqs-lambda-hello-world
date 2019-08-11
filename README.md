@@ -3,26 +3,26 @@ An attempt at making a simple sqs polling lambda in go
 
 ### Build Lambda
 
-`make build`
+`$ > make build`
 
 ### AWS Infrastructure
 
 1. Create python virtual env
 
-   `make package`
+   `$ > make package`
 
-   `source ./venv/bin/activate`
+   `$ > source ./venv/bin/activate`
 
 2. Create the deployment bucket stack
-   `cd scripts/python/src`
-   `python -m helloworld.bucketenv aws_account_id aws_region`
+   `$ > cd scripts/python/src`
+   `$ > python -m helloworld.bucketenv aws_account_id aws_region`
 
 3. Upload zip to bucket
-   `./deploy.sh`
+   `$ > ./deploy.sh`
 
 4. Create the stack for the function
-   `cd scripts/python/src`
-   `python -m helloworld.funcenv aws_account_id aws_region`
+   `$ > cd scripts/python/src`
+   `$ > python -m helloworld.funcenv aws_account_id aws_region`
 
 
 
@@ -30,7 +30,7 @@ An attempt at making a simple sqs polling lambda in go
 
 After making changes to the code and building the zip. Use the following script to update the lambda.
 
-`./update.sh`
+`$ > ./update.sh`
 
 
 
@@ -38,8 +38,10 @@ After making changes to the code and building the zip. Use the following script 
 
 The following script can be used to test out the functionality.
 
-`python scripts/python/src/helloworld/publish.py`
+`$ > cd scripts/python/src`
+
+`$ > python -m helloworld.publish.py aws_account_d aws_region`
 
 ### Note
 
-Create EventSourceMapping is not done via cloudformation 
+aws cli is used to `CreateEventSourceMapping` instead of doing it via cloudformation 
