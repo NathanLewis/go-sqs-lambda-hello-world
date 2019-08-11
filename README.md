@@ -26,6 +26,12 @@ An attempt at making a simple sqs polling lambda in go
 
 
 
+### Development
+
+After making changes to the code and building the zip. Use the following script to update the lambda.
+
+`./update.sh`
+
 ### Note
 
 Create EventSourceMapping is not done via cloudformation 
