@@ -12,12 +12,8 @@ class LambdaStack():
     
     def generate_template(self, template):
         
-        alias = template.add_parameter(Parameter(
-            "LambdaEnvAlias",
-            Default="int",
-            Description="Alias used to reference the lambda",
-            Type="String"
-        ))
+        alias = Parameter("LambdaEnvAlias",Default="int",Description="Alias used to reference the lambda",Type="String" )
+        template.add_parameter(aliasP)
 
         lambda_bucket = template.add_parameter(Parameter(
             "LambdaBucket",
