@@ -22,6 +22,7 @@ type Configuration struct {
 	Port                int
 	CertKeyFileLocation string
 	CertCrtFileLocation string
+	AwsAccountID        string
 }
 
 //Config used to load the config valiues.

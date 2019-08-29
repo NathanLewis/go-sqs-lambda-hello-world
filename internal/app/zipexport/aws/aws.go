@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/NathanLewis/go-sqs-lambda-hello-world/internal/app/zipexport/wormhole"
+	"github.com/NathanLewis/go-sqs-lambda-hello-world/internal/pkg/zipexport/util"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"./../../../internal/app/zipexport/wormhole"
-	"./../../../internal/pkg/zipexport/util"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -31,9 +31,9 @@ type WormHoleCredentialsProvider struct {
 func (wm *WormHoleCredentialsProvider) Retrieve() (credentials.Value, error) {
 	si := wm.WormHole.SessionInfo()
 
-	log.Printf("--- RETRIEVE accessKeyId=%s, secretAccessKey=%s, sessionToken=%s", si.AccessKeyId, si.SecretAccessKey, si.SessionToken)
+	log.Printf("--- RETRIEVE accessKeyId=%s, secretAccessKey=%s, sessionToken=%s", si.AccessKeyID, si.SecretAccessKey, si.SessionToken)
 	value := credentials.Value{
-		si.AccessKeyId,
+		si.AccessKeyID,
 		si.SecretAccessKey,
 		si.SessionToken,
 		"wormhole",
@@ -55,7 +55,9 @@ func (wm *WormHoleCredentialsProvider) IsExpired() bool {
 //AwsSession used to create aws session
 func (ugcAws *AWS) AwsSession(region string) *session.Session {
 
-	var awsRegion = util.AwsRegion()
+	config := util.Configuration{}
+	config = config.Config()
+	var awsRegion = config.Region
 	if region != "" {
 		awsRegion = region
 	}
@@ -64,6 +66,7 @@ func (ugcAws *AWS) AwsSession(region string) *session.Session {
 		[]credentials.Provider{
 			&WormHoleCredentialsProvider{WormHole: ugcAws.WormHole},
 		})
+
 	sess, err := session.NewSession(&aws.Config{
 		Region:     aws.String(awsRegion),
 		MaxRetries: aws.Int(retryCount),

@@ -7,8 +7,8 @@ import (
 	"net"
 	"time"
 
-	
-	ugchttp "github.com/bbc/ugcuploader/internal/pkg/ugcuploader/http"
+	ugchttp "github.com/NathanLewis/go-sqs-lambda-hello-world/internal/pkg/zipexport/http"
+	"github.com/NathanLewis/go-sqs-lambda-hello-world/internal/pkg/zipexport/util"
 )
 
 //WormHole used ot connect to wormhole
@@ -32,8 +32,9 @@ type WormholeResponse struct {
 
 //SessionInfo used to connect to aws
 func (wormHole *WormHole) SessionInfo() (wormHoleResponse WormholeResponse) {
-	awsAccountId := util.AwsAccountID()
-	wh := fmt.Sprintf("https://wormhole.api.bbci.co.uk/account/%s/credentials", awsAccountId)
+	config := util.Configuration{}
+	config = config.Config()
+	wh := fmt.Sprintf("https://wormhole.api.bbci.co.uk/account/%s/credentials", config.AwsAccountID)
 	body, err := wormHole.UgcHttp.FetchItemWormHole(wh, make(map[string]string))
 
 	if err != nil {

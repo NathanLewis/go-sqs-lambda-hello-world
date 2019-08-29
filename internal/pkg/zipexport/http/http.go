@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"go-sqs-lambda-hello-world/internal/pkg/zipexport/util"
+	"github.com/NathanLewis/go-sqs-lambda-hello-world/internal/pkg/zipexport/util"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -39,7 +39,7 @@ func (ugcHttp *UgcHttp) transportWithProxy(certificates []tls.Certificate) *http
 		},
 		Dial:               ugcHttp.dialTimeout,
 		MaxIdleConns:       10,
-		IdleConnTimeout:    30 * time.Second,
+		IdleConnTimeout:    6000 * time.Second,
 		DisableCompression: true,
 	}
 	return tr
@@ -55,7 +55,7 @@ func (ugcHttp *UgcHttp) transportWithoutProxy(certificates []tls.Certificate) *h
 		},
 		Dial:               ugcHttp.dialTimeout,
 		MaxIdleConns:       10,
-		IdleConnTimeout:    30 * time.Second,
+		IdleConnTimeout:    6000 * time.Second,
 		DisableCompression: true,
 	}
 	return tr

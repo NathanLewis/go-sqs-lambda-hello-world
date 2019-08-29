@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"compress/flate"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,20 +14,22 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cavaliercoder/grab"
 	"golang.org/x/net/http2"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 
-	"go-sqs-lambda-hello-world/internal/pkg/zipexport/util"
-	ugcAws "go-sqs-lambda-hello-world/internal/app/zipexport/aws"
-	"go-sqs-lambda-hello-world/internal/app/zipexport/wormhole"
-	ugchttp "go-sqs-lambda-hello-world/internal/pkg/zipexport/http"
+	//"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	ugcAws "github.com/NathanLewis/go-sqs-lambda-hello-world/internal/app/zipexport/aws"
+	"github.com/NathanLewis/go-sqs-lambda-hello-world/internal/app/zipexport/wormhole"
+	ugchttp "github.com/NathanLewis/go-sqs-lambda-hello-world/internal/pkg/zipexport/http"
+	"github.com/NathanLewis/go-sqs-lambda-hello-world/internal/pkg/zipexport/util"
 )
 
 //HTTPClientSettings snippet-start:[s3.go.customHttpClient_struct]
@@ -68,8 +71,6 @@ func NewHTTPClientWithSettings(httpSettings HTTPClientSettings) *http.Client {
 	}
 }
 
-
-
 var config = util.Configuration{}
 var downloader *s3manager.Downloader
 
@@ -84,14 +85,14 @@ func main() {
 
 	initAwsBucket()
 
-	http.HandleFunc("/", handler)
+//	http.Handle("/metrics", promhttp.Handler())
+	http.HandleFunc("/zip", handler)
 	http.ListenAndServe(":"+strconv.Itoa(config.Port), nil)
 }
 
 func initAwsBucket() {
 
 	downloader = awsDownloader()
-	downloader.Concurrency = 1
 
 }
 
@@ -109,14 +110,62 @@ func (fw FakeWriterAt) WriteAt(p []byte, offset int64) (n int, err error) {
 // Remove all other unrecognised characters apart from
 var makeSafeFileName = regexp.MustCompile(`[#<>:"/\|?*\\]`)
 
+//S3ChannelData data used by the channel
+type S3ChannelData struct {
+	ItemToZip    []byte
+	SubmissionID string
+}
+
+func downloadFromS3(key string, subID string, s3ChannelData chan S3ChannelData, process *sync.WaitGroup) {
+	buff := &aws.WriteAtBuffer{}
+	numBytes, err := downloader.Download(buff,
+		&s3.GetObjectInput{
+			Bucket: aws.String(config.Bucket),
+			Key:    aws.String(key),
+		})
+
+	if err != nil {
+		exitErrorf("problems downloading", err)
+	}
+
+	fmt.Println("Downloaded ", key, numBytes, "bytes")
+	s3ChannelData <- S3ChannelData{ItemToZip: buff.Bytes(), SubmissionID: subID}
+	process.Done()
+}
+
+func processMessages(w http.ResponseWriter, processComplete *sync.WaitGroup, s3ChannelData chan S3ChannelData) {
+
+	// Loop over files, add them to the
+	zipWriter := zip.NewWriter(w)
+	// Register a custom Deflate compressor.
+	zipWriter.RegisterCompressor(zip.Deflate, func(out io.Writer) (io.WriteCloser, error) {
+		return flate.NewWriter(out, flate.NoCompression)
+	})
+
+	processComplete.Add(1)
+	fmt.Printf("Process has sugar\n")
+	for s3Data := range s3ChannelData {
+		fmt.Printf("\nFectech: %s\n", s3Data.SubmissionID)
+		// We have to set a special flag so zip files recognize utf file names
+		// See http://stackoverflow.com/questions/30026083/creating-a-zip-archive-with-unicode-filenames-using-gos-archive-zip
+		h := &zip.FileHeader{
+			Name:   s3Data.SubmissionID,
+			Method: zip.Deflate,
+			Flags:  0x800,
+		}
+		f, _ := zipWriter.CreateHeader(h)
+		f.Write(s3Data.ItemToZip)
+
+	}
+
+	zipWriter.SetComment("--end--")
+	zipWriter.Close()
+	processComplete.Done()
+	fmt.Printf("Proces dugger\n")
+}
+
 func handler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-
-	health, ok := r.URL.Query()["health"]
-	if len(health) > 0 {
-		fmt.Fprintf(w, "OK")
-		return
-	}
 
 	// Get "ref" URL params
 	campaignIds, ok := r.URL.Query()["campaignId"]
@@ -126,51 +175,33 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 	campaignID := campaignIds[0]
 
-	// Start processing the response
+	s3DataChannel := make(chan S3ChannelData, 5000)
+	processComplete := sync.WaitGroup{}
 	w.Header().Add("Content-Disposition", "attachment; filename=\"download.zip\"")
 	w.Header().Add("Content-Type", "application/zip")
-
-	// Loop over files, add them to the
-	zipWriter := zip.NewWriter(w)
+	go processMessages(w, &processComplete, s3DataChannel)
 
 	s3Files := fetchS3Items(campaignID)
-
+	processS3Items := sync.WaitGroup{}
+	count := 0
 	for _, file := range s3Files {
-
 		if file.Path == "" {
 			log.Printf("Missing path for file: %v", file)
 			continue
 		}
-
-		pr, pw := io.Pipe()
-		numBytes, err := downloader.Download(FakeWriterAt{pw},
-			&s3.GetObjectInput{
-				Bucket: aws.String(config.Bucket),
-				Key:    aws.String(file.Path),
-			})
-
-		pw.Close()
-		if err != nil {
-			exitErrorf("problems downloading", err)
+		processS3Items.Add(1)
+		go downloadFromS3(file.Path, file.SubmissionID, s3DataChannel, &processS3Items)
+		count = count + 1
+		if count == 50 {
+			processS3Items.Wait()
+			count = 0
 		}
-
-		fmt.Println("Downloaded", file.Path, numBytes, "bytes")
-
-		// We have to set a special flag so zip files recognize utf file names
-		// See http://stackoverflow.com/questions/30026083/creating-a-zip-archive-with-unicode-filenames-using-gos-archive-zip
-		h := &zip.FileHeader{
-			Name:   file.SubmissionID,
-			Method: zip.Deflate,
-			Flags:  0x800,
-		}
-
-		f, _ := zipWriter.CreateHeader(h)
-		io.Copy(f, pr)
-		pr.Close()
-
 	}
 
-	zipWriter.Close()
+	processS3Items.Wait()
+	log.Printf("\n\n%s\t%s\t DigDag to Download items from s3: %s", r.Method, r.RequestURI, time.Since(start))
+	close(s3DataChannel)
+	processComplete.Wait()
 	log.Printf("%s\t%s\t%s", r.Method, r.RequestURI, time.Since(start))
 }
 
@@ -179,13 +210,13 @@ type s3Item struct {
 	SubmissionID string
 }
 
-func awsDowloader()  *s3manager.Downloader {
+func awsDownloader() *s3manager.Downloader {
 	ugcCert := util.UgcCert{}
 	ugcHTTP := ugchttp.UgcHttp{Timeout: time.Duration(15 * time.Second),
 		UgcCert: &ugcCert}
-	ugcHttp.InitClient(true)
+	ugcHTTP.InitClient(true)
 	timeout := time.Duration(15 * time.Second)
-	wh := wormhole.WormHole{UgcCert: &ugcCert, UgcHttp: &ugcHTTP, Timeout: timeout}
+	wh := wormhole.WormHole{UgcHttp: &ugcHTTP, Timeout: timeout}
 	ugcAwsSession := ugcAws.AWS{WormHole: &wh, UgcCert: &ugcCert}
 	sess := ugcAwsSession.AwsSession("")
 
@@ -204,17 +235,49 @@ func fetchS3Items(campaignID string) []s3Item {
 	resp := client.Do(req)
 
 	t := time.NewTicker(time.Second)
-	defer t.Stop()
-	fmt.Sprintf("------------ FINISHED DOWNLOADING SUBMISSIONS ZIP FILE-----")
+
+Loop:
+	for {
+		select {
+		case <-t.C:
+			fmt.Printf("  transferred %v / %v bytes (%.2f%%)\n",
+				resp.BytesComplete(),
+				resp.Size,
+				100*resp.Progress())
+
+		case <-resp.Done:
+			// download is complete
+			break Loop
+		}
+	}
+	t.Stop()
+
+	// check for errors
+	if err := resp.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "Download failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Download saved to ./%v \n", resp.Filename)
+	fmt.Printf("------------ FINISHED DOWNLOADING SUBMISSIONS ZIP FILE-----")
 
 	zf, _ := zip.OpenReader(resp.Filename)
 	defer zf.Close()
+	defer os.Remove(resp.Filename)
 
 	var s3Items []s3Item
 
 	for _, file := range zf.File {
 		fmt.Printf("=%s\n", file.Name)
-		content := readAll(file)
+
+		fc, err := file.Open()
+		if err != nil {
+			exitErrorf(fmt.Sprintf("Problems open file:%s", file.Name), err)
+		}
+
+		content, _ := ioutil.ReadAll(fc)
+		fc.Close()
+
 		fmt.Printf("%s\n\n", content) // file content
 		cnt := string(content)
 		for _, s := range strings.Split(strings.Replace(cnt, "\r\n", "\n", -1), "\n") {
@@ -229,15 +292,6 @@ func fetchS3Items(campaignID string) []s3Item {
 	}
 	return s3Items
 
-}
-
-// readAll is a wrapper function for ioutil.ReadAll. It accepts a zip.File as
-// its parameter, opens it, reads its content and returns it as a byte slice.
-func readAll(file *zip.File) []byte {
-	fc, _ := file.Open()
-	defer fc.Close()
-	content, _ := ioutil.ReadAll(fc)
-	return content
 }
 
 func exitErrorf(msg string, args ...interface{}) {
