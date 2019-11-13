@@ -31,6 +31,7 @@ import (
     "flag"
     "fmt"
     "os"
+    "encoding/xml"
 
     "github.com/aws/aws-sdk-go/aws"
     "github.com/aws/aws-sdk-go/aws/awserr"
@@ -43,6 +44,17 @@ import (
 // Usage:
 //    go run sqs_longpolling_receive_message.go -n queue_name -t timeout
 func main() {
+    type Uri struct {
+        XMLName xml.Name `xml:"uri"`
+        Path string
+    }
+
+    type SimpleAsset struct {
+        XMLName xml.Name `xml:"simpleAsset"`
+        ActivityId string  `xml:"activityId,attr"`  // notice the capitalized field name here and the `xml:"app_name,attr"`
+        Uri Uri
+    }
+
     var name string
     var timeout int64
     flag.StringVar(&name, "n", "", "Queue name")
@@ -83,7 +95,7 @@ func main() {
             AttributeNames: aws.StringSlice([]string{
                 "SentTimestamp",
             }),
-            MaxNumberOfMessages: aws.Int64(10),
+            MaxNumberOfMessages: aws.Int64(1),
             MessageAttributeNames: aws.StringSlice([]string{
                 "All",
             }),
@@ -92,7 +104,22 @@ func main() {
         })
         if len(result.Messages) > 0 {
             fmt.Printf("Received %d messages.\n", len(result.Messages))
+            fmt.Printf("%T\n", result.Messages)
             fmt.Println(result.Messages)
+            fmt.Printf("%T\n", result.Messages[0])
+            fmt.Println(result.Messages[0])
+            fmt.Printf("%s\n", *(result.Messages[0]).Body)
+    /*
+            var message = result.Message[0]
+            fmt.Println(result.Message[0])
+            var asset SimpleAsset
+            err := xml.Unmarshal([]byte(message.Body), &asset)
+            if err != nil {
+                fmt.Printf("error: %v", err)
+            } else {
+                fmt.Printf("asset ID:: %q\n", asset.ActivityId)
+            }
+     */
         }
     }
 
