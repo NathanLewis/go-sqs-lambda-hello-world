@@ -1,29 +1,4 @@
-// snippet-comment:[These are tags for the AWS doc team's sample catalog. Do not remove.]
-// snippet-sourceauthor:[Doug-AWS]
-// snippet-sourcedescription:[Enables long polling on message receipt.]
-// snippet-keyword:[Amazon Simple Queue Service]
-// snippet-keyword:[Amazon SQS]
-// snippet-keyword:[GetQueueUrl function]
-// snippet-keyword:[ReceiveMessage function]
-// snippet-keyword:[Go]
-// snippet-sourcesyntax:[go]
-// snippet-service:[sqs]
-// snippet-keyword:[Code Sample]
-// snippet-sourcetype:[full-example]
-// snippet-sourcedate:[2018-03-16]
-/*
-   Copyright 2010-2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
-
-   This file is licensed under the Apache License, Version 2.0 (the "License").
-   You may not use this file except in compliance with the License. A copy of
-   the License is located at
-
-    http://aws.amazon.com/apache2.0/
-
-   This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied. See the License for the
-   specific language governing permissions and limitations under the License.
-*/
+// This file is a modified version of code from Amazon which they distributed under an Apache 2.0 license
 
 package main
 
@@ -46,13 +21,13 @@ import (
 func main() {
     type Uri struct {
         XMLName xml.Name `xml:"uri"`
-        Path string
+        Path    string
     }
 
     type SimpleAsset struct {
-        XMLName xml.Name `xml:"simpleAsset"`
-        ActivityId string  `xml:"activityId,attr"`  // notice the capitalized field name here and the `xml:"app_name,attr"`
-        Uri Uri
+        XMLName    xml.Name `xml:"simpleAsset"`
+        ActivityId string   `xml:"activityId,attr"` // notice the capitalized field name here and the `xml:"app_name,attr"`
+        Uri        Uri
     }
 
     var name string
@@ -88,39 +63,58 @@ func main() {
         exitErrorf("Unable to queue %q, %v.", name, err)
     }
 
+    inputChannel := make(chan string)
+    go messagePoller(svc, resultURL, inputChannel)
     for {
-        // Receive a message from the SQS queue with long polling enabled.
-        result, _ := svc.ReceiveMessage(&sqs.ReceiveMessageInput{
-            QueueUrl: resultURL.QueueUrl,
-            AttributeNames: aws.StringSlice([]string{
-                "SentTimestamp",
-            }),
-            MaxNumberOfMessages: aws.Int64(1),
-            MessageAttributeNames: aws.StringSlice([]string{
-                "All",
-            }),
-            VisibilityTimeout:   aws.Int64(60),
-            WaitTimeSeconds:     aws.Int64(0),
-        })
-        if len(result.Messages) > 0 {
-            fmt.Printf("Received %d messages.\n", len(result.Messages))
-            //fmt.Printf("%T\n", result.Messages[0])
-            var message = *(result.Messages[0]).Body
-            fmt.Println(message)
-            var asset SimpleAsset
-            err := xml.Unmarshal([]byte(message), &asset)
-            if err != nil {
-                fmt.Printf("error: %v\n", err)
-            } else {
-                fmt.Printf("asset ID:: %q\n", asset.ActivityId)
-            }
-            svc.DeleteMessage(&sqs.DeleteMessageInput{
-                QueueUrl:      resultURL.QueueUrl,
-                ReceiptHandle: result.Messages[0].ReceiptHandle,
-            })
+        var message = <-inputChannel
+        if 0 == len(message) {
+            continue
+        }
+        var asset SimpleAsset
+        err := xml.Unmarshal([]byte(message), &asset)
+        if err != nil {
+            fmt.Printf("error: %v\n", err)
+        } else {
+            fmt.Printf("asset ID:: %q\n", asset.ActivityId)
         }
     }
+}
 
+func messagePoller(svc *sqs.SQS, resultURL *sqs.GetQueueUrlOutput, messages chan<- string) {
+    for {
+       messages <- getMessage(svc, resultURL)
+    }
+}
+
+func getMessage(svc *sqs.SQS, resultURL *sqs.GetQueueUrlOutput) string {
+    // Receive a message from the SQS queue with long polling enabled.
+    result, _ := svc.ReceiveMessage(&sqs.ReceiveMessageInput{
+        QueueUrl: resultURL.QueueUrl,
+        AttributeNames: aws.StringSlice([]string{
+            "SentTimestamp",
+        }),
+        MaxNumberOfMessages: aws.Int64(1),
+        MessageAttributeNames: aws.StringSlice([]string{
+            "All",
+        }),
+        VisibilityTimeout: aws.Int64(60),
+        WaitTimeSeconds:   aws.Int64(1),
+    })
+    if len(result.Messages) > 0 {
+        fmt.Printf("Received %d messages.\n", len(result.Messages))
+        //fmt.Printf("%T\n", result.Messages[0])
+        var message = *(result.Messages[0]).Body
+        fmt.Println(message)
+        _, err := svc.DeleteMessage(&sqs.DeleteMessageInput{
+            QueueUrl:      resultURL.QueueUrl,
+            ReceiptHandle: result.Messages[0].ReceiptHandle,
+        })
+        if err != nil {
+            fmt.Println("Delete Error", err)
+        }
+        return message
+    }
+    return ""
 }
 
 func exitErrorf(msg string, args ...interface{}) {
