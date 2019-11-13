@@ -104,22 +104,18 @@ func main() {
         })
         if len(result.Messages) > 0 {
             fmt.Printf("Received %d messages.\n", len(result.Messages))
-            fmt.Printf("%T\n", result.Messages)
-            fmt.Println(result.Messages)
             fmt.Printf("%T\n", result.Messages[0])
             fmt.Println(result.Messages[0])
-            fmt.Printf("%s\n", *(result.Messages[0]).Body)
-    /*
-            var message = result.Message[0]
-            fmt.Println(result.Message[0])
+            var message = *(result.Messages[0]).Body
+            //fmt.Printf("%s\n", *(result.Messages[0]).Body)
+            fmt.Println(message)
             var asset SimpleAsset
-            err := xml.Unmarshal([]byte(message.Body), &asset)
+            err := xml.Unmarshal([]byte(message), &asset)
             if err != nil {
-                fmt.Printf("error: %v", err)
+                fmt.Printf("error: %v\n", err)
             } else {
                 fmt.Printf("asset ID:: %q\n", asset.ActivityId)
             }
-     */
         }
     }
 
