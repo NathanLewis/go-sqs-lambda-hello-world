@@ -3,10 +3,10 @@
 package main
 
 import (
+    "encoding/xml"
     "flag"
     "fmt"
     "os"
-    "encoding/xml"
 
     "github.com/aws/aws-sdk-go/aws"
     "github.com/aws/aws-sdk-go/aws/awserr"
@@ -43,12 +43,7 @@ func main() {
 
     // Initialize a session in eu-west-1 that the SDK will use to load
     // credentials from the shared credentials file ~/.aws/credentials.
-    sess, err := session.NewSession(&aws.Config{
-        Region: aws.String("eu-west-1")},
-    )
-
-    // Create a SQS service client.
-    svc := sqs.New(sess)
+    err, svc := setupSession()
 
     // Need to convert the queue name into a URL. Make the GetQueueUrl
     // API call to retrieve the URL. This is needed for receiving messages
@@ -80,41 +75,13 @@ func main() {
     }
 }
 
-func messagePoller(svc *sqs.SQS, resultURL *sqs.GetQueueUrlOutput, messages chan<- string) {
-    for {
-       messages <- getMessage(svc, resultURL)
-    }
-}
-
-func getMessage(svc *sqs.SQS, resultURL *sqs.GetQueueUrlOutput) string {
-    // Receive a message from the SQS queue with long polling enabled.
-    result, _ := svc.ReceiveMessage(&sqs.ReceiveMessageInput{
-        QueueUrl: resultURL.QueueUrl,
-        AttributeNames: aws.StringSlice([]string{
-            "SentTimestamp",
-        }),
-        MaxNumberOfMessages: aws.Int64(1),
-        MessageAttributeNames: aws.StringSlice([]string{
-            "All",
-        }),
-        VisibilityTimeout: aws.Int64(60),
-        WaitTimeSeconds:   aws.Int64(1),
-    })
-    if len(result.Messages) > 0 {
-        fmt.Printf("Received %d messages.\n", len(result.Messages))
-        //fmt.Printf("%T\n", result.Messages[0])
-        var message = *(result.Messages[0]).Body
-        fmt.Println(message)
-        _, err := svc.DeleteMessage(&sqs.DeleteMessageInput{
-            QueueUrl:      resultURL.QueueUrl,
-            ReceiptHandle: result.Messages[0].ReceiptHandle,
-        })
-        if err != nil {
-            fmt.Println("Delete Error", err)
-        }
-        return message
-    }
-    return ""
+func setupSession() (error, *sqs.SQS) {
+    sess, err := session.NewSession(&aws.Config{
+        Region: aws.String("eu-west-1")},
+    )
+    // Create a SQS service client.
+    svc := sqs.New(sess)
+    return err, svc
 }
 
 func exitErrorf(msg string, args ...interface{}) {
