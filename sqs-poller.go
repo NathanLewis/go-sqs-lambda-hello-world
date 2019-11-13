@@ -26,40 +26,50 @@ func main() {
 
     type SimpleAsset struct {
         XMLName    xml.Name `xml:"simpleAsset"`
-        ActivityId string   `xml:"activityId,attr"` // notice the capitalized field name here and the `xml:"app_name,attr"`
+        ActivityId string   `xml:"activityId,attr"` // notice the capitalized field inputName here and the `xml:"app_name,attr"`
         Uri        Uri
     }
 
-    var name string
+    var inputName, badMesgName string
     var timeout int64
-    flag.StringVar(&name, "n", "", "Queue name")
+    flag.StringVar(&inputName, "n", "", "Input Queue inputName")
+    flag.StringVar(&badMesgName, "b", "", "Bad Message Queue inputName")
     flag.Int64Var(&timeout, "t", 20, "(Optional) Timeout in seconds for long polling")
     flag.Parse()
 
-    if len(name) == 0 {
+    if len(inputName) == 0 {
         flag.PrintDefaults()
-        exitErrorf("Queue name required")
+        exitErrorf("Input Queue Name required")
+    }
+    if len(badMesgName) == 0 {
+        flag.PrintDefaults()
+        exitErrorf("Bad Message Queue Name required")
     }
 
     // Initialize a session in eu-west-1 that the SDK will use to load
     // credentials from the shared credentials file ~/.aws/credentials.
     err, svc := setupSession()
 
-    // Need to convert the queue name into a URL. Make the GetQueueUrl
+    // Need to convert the queue inputName into a URL. Make the GetQueueUrl
     // API call to retrieve the URL. This is needed for receiving messages
     // from the queue.
-    resultURL, err := svc.GetQueueUrl(&sqs.GetQueueUrlInput{
-        QueueName: aws.String(name),
-    })
+    inputQueueURL := findQueueUrl(err, svc, inputName)
     if err != nil {
         if aerr, ok := err.(awserr.Error); ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
-            exitErrorf("Unable to find queue %q.", name)
+            exitErrorf("Unable to find queue %q.", inputName)
         }
-        exitErrorf("Unable to queue %q, %v.", name, err)
+        exitErrorf("Unable to queue %q, %v.", inputName, err)
+    }
+    badMesgQueueURL := findQueueUrl(err, svc, badMesgName)
+    if err != nil {
+        if aerr, ok := err.(awserr.Error); ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
+            exitErrorf("Unable to find queue %q.", badMesgName)
+        }
+        exitErrorf("Unable to queue %q, %v.", badMesgName, err)
     }
 
     inputChannel := make(chan string)
-    go messagePoller(svc, resultURL, inputChannel)
+    go messagePoller(svc, inputQueueURL, inputChannel)
     for {
         var message = <-inputChannel
         if 0 == len(message) {
@@ -69,10 +79,21 @@ func main() {
         err := xml.Unmarshal([]byte(message), &asset)
         if err != nil {
             fmt.Printf("error: %v\n", err)
+            err := sendMessageToQueue(svc, message, badMesgQueueURL)
+            if err != nil {
+                fmt.Printf("Unable to send to Queue %s\n", badMesgQueueURL.QueueUrl)
+            }
         } else {
             fmt.Printf("asset ID:: %q\n", asset.ActivityId)
         }
     }
+}
+
+func findQueueUrl(err error, svc *sqs.SQS, queueName string) *sqs.GetQueueUrlOutput {
+    queueURL, err := svc.GetQueueUrl(&sqs.GetQueueUrlInput{
+        QueueName: aws.String(queueName),
+    })
+    return queueURL
 }
 
 func setupSession() (error, *sqs.SQS) {

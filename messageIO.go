@@ -43,3 +43,12 @@ func getMessage(svc *sqs.SQS, resultURL *sqs.GetQueueUrlOutput) string {
 	return ""
 }
 
+func sendMessageToQueue(svc *sqs.SQS, message string, badMesgQueueURL *sqs.GetQueueUrlOutput) error {
+	_, err := svc.SendMessage(&sqs.SendMessageInput{
+		DelaySeconds: aws.Int64(0),
+		MessageBody:  aws.String(message),
+		QueueUrl:     badMesgQueueURL.QueueUrl,
+	})
+	return err
+}
+
