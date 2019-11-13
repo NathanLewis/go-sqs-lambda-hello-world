@@ -104,10 +104,8 @@ func main() {
         })
         if len(result.Messages) > 0 {
             fmt.Printf("Received %d messages.\n", len(result.Messages))
-            fmt.Printf("%T\n", result.Messages[0])
-            fmt.Println(result.Messages[0])
+            //fmt.Printf("%T\n", result.Messages[0])
             var message = *(result.Messages[0]).Body
-            //fmt.Printf("%s\n", *(result.Messages[0]).Body)
             fmt.Println(message)
             var asset SimpleAsset
             err := xml.Unmarshal([]byte(message), &asset)
@@ -116,6 +114,10 @@ func main() {
             } else {
                 fmt.Printf("asset ID:: %q\n", asset.ActivityId)
             }
+            svc.DeleteMessage(&sqs.DeleteMessageInput{
+                QueueUrl:      resultURL.QueueUrl,
+                ReceiptHandle: result.Messages[0].ReceiptHandle,
+            })
         }
     }
 
