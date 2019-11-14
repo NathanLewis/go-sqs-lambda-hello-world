@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
@@ -59,5 +60,18 @@ func messageSender(svc *sqs.SQS, badMesgQueueURL *sqs.GetQueueUrlOutput, message
 			fmt.Printf("Unable to send to Queue %s\n", badMesgQueueURL.QueueUrl)
 		}
 	}
+}
+
+func findQueueUrl(svc *sqs.SQS, queueName string) *sqs.GetQueueUrlOutput {
+	queueURL, err := svc.GetQueueUrl(&sqs.GetQueueUrlInput{
+		QueueName: aws.String(queueName),
+	})
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
+			exitErrorf("Unable to find queue %q.", queueName)
+		}
+		exitErrorf("Unable to queue %q, %v.", queueName, err)
+	}
+	return queueURL
 }
 

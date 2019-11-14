@@ -15,13 +15,13 @@ func main() {
 
     type Uri struct {
         XMLName xml.Name `xml:"uri"`
-        Path string
+        Path string `xml:",innerxml"`
     }
 
     type SimpleAsset struct {
         XMLName xml.Name `xml:"simpleAsset"`
         ActivityId string  `xml:"activityId,attr"`  // notice the capitalized field name here and the `xml:"app_name,attr"`
-        Uri Uri
+        Uri Uri //`xml:"uri"`
     }
 
     var asset SimpleAsset

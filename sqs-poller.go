@@ -9,7 +9,6 @@ import (
     "os"
 
     "github.com/aws/aws-sdk-go/aws"
-    "github.com/aws/aws-sdk-go/aws/awserr"
     "github.com/aws/aws-sdk-go/aws/session"
     "github.com/aws/aws-sdk-go/service/sqs"
 )
@@ -17,11 +16,11 @@ import (
 // Receive message from Queue with long polling enabled.
 //
 // Usage:
-//    go run sqs_longpolling_receive_message.go -n queue_name -t timeout
+//    go run sqs_handler.go -n queue_name -t timeout
 func main() {
     type Uri struct {
-        XMLName xml.Name `xml:"uri"`
-        Path    string
+        XMLName xml.Name    `xml:"uri"`
+        Path    string      `xml:",innerxml"`
     }
 
     type SimpleAsset struct {
@@ -69,21 +68,9 @@ func main() {
             badMesgChannel <- message
         } else {
             fmt.Printf("asset ID:: %q\n", asset.ActivityId)
+            fmt.Printf("asset location:: %q\n", asset.Uri.Path)
         }
     }
-}
-
-func findQueueUrl(svc *sqs.SQS, queueName string) *sqs.GetQueueUrlOutput {
-    queueURL, err := svc.GetQueueUrl(&sqs.GetQueueUrlInput{
-        QueueName: aws.String(queueName),
-    })
-    if err != nil {
-        if aerr, ok := err.(awserr.Error); ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
-            exitErrorf("Unable to find queue %q.", queueName)
-        }
-        exitErrorf("Unable to queue %q, %v.", queueName, err)
-    }
-    return queueURL
 }
 
 func setupSession() *sqs.SQS {
