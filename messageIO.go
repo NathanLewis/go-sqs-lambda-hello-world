@@ -8,7 +8,11 @@ import (
 
 func messagePoller(svc *sqs.SQS, resultURL *sqs.GetQueueUrlOutput, messages chan<- string) {
 	for {
-		messages <- getMessage(svc, resultURL)
+		message := getMessage(svc, resultURL)
+		if 0 == len(message) {
+			continue
+		}
+		messages <- message
 	}
 }
 
@@ -43,12 +47,17 @@ func getMessage(svc *sqs.SQS, resultURL *sqs.GetQueueUrlOutput) string {
 	return ""
 }
 
-func sendMessageToQueue(svc *sqs.SQS, message string, badMesgQueueURL *sqs.GetQueueUrlOutput) error {
-	_, err := svc.SendMessage(&sqs.SendMessageInput{
-		DelaySeconds: aws.Int64(0),
-		MessageBody:  aws.String(message),
-		QueueUrl:     badMesgQueueURL.QueueUrl,
-	})
-	return err
+func messageSender(svc *sqs.SQS, badMesgQueueURL *sqs.GetQueueUrlOutput, messages chan string) {
+	for {
+		message := <- messages
+		_, err := svc.SendMessage(&sqs.SendMessageInput{
+			DelaySeconds: aws.Int64(0),
+			MessageBody:  aws.String(message),
+			QueueUrl:     badMesgQueueURL.QueueUrl,
+		})
+		if err != nil {
+			fmt.Printf("Unable to send to Queue %s\n", badMesgQueueURL.QueueUrl)
+		}
+	}
 }
 

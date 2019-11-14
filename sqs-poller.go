@@ -69,20 +69,17 @@ func main() {
     }
 
     inputChannel := make(chan string)
+    badMesgChannel := make(chan string)
     go messagePoller(svc, inputQueueURL, inputChannel)
+    go messageSender(svc, badMesgQueueURL, badMesgChannel)
+
     for {
         var message = <-inputChannel
-        if 0 == len(message) {
-            continue
-        }
         var asset SimpleAsset
         err := xml.Unmarshal([]byte(message), &asset)
         if err != nil {
             fmt.Printf("error: %v\n", err)
-            err := sendMessageToQueue(svc, message, badMesgQueueURL)
-            if err != nil {
-                fmt.Printf("Unable to send to Queue %s\n", badMesgQueueURL.QueueUrl)
-            }
+            badMesgChannel <- message
         } else {
             fmt.Printf("asset ID:: %q\n", asset.ActivityId)
         }
