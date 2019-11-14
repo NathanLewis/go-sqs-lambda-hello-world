@@ -1,6 +1,11 @@
 # go-sqs-lambda-hello-world
 An attempt at making a simple sqs polling lambda in go
 
+## Please note that the current implementation is for ec2 while I get all the features working.
+
+### Build for ec2 
+GOOS=linux GOARCH=amd64 go build
+
 ### Build Lambda
 
 `$ > make build`
