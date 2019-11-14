@@ -47,26 +47,13 @@ func main() {
     }
 
     // Initialize a session in eu-west-1 that the SDK will use to load
-    // credentials from the shared credentials file ~/.aws/credentials.
-    err, svc := setupSession()
+    svc := setupSession()
 
     // Need to convert the queue inputName into a URL. Make the GetQueueUrl
     // API call to retrieve the URL. This is needed for receiving messages
     // from the queue.
-    inputQueueURL := findQueueUrl(err, svc, inputName)
-    if err != nil {
-        if aerr, ok := err.(awserr.Error); ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
-            exitErrorf("Unable to find queue %q.", inputName)
-        }
-        exitErrorf("Unable to queue %q, %v.", inputName, err)
-    }
-    badMesgQueueURL := findQueueUrl(err, svc, badMesgName)
-    if err != nil {
-        if aerr, ok := err.(awserr.Error); ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
-            exitErrorf("Unable to find queue %q.", badMesgName)
-        }
-        exitErrorf("Unable to queue %q, %v.", badMesgName, err)
-    }
+    inputQueueURL := findQueueUrl(svc, inputName)
+    badMesgQueueURL := findQueueUrl(svc, badMesgName)
 
     inputChannel := make(chan string)
     badMesgChannel := make(chan string)
@@ -78,7 +65,7 @@ func main() {
         var asset SimpleAsset
         err := xml.Unmarshal([]byte(message), &asset)
         if err != nil {
-            fmt.Printf("error: %v\n", err)
+            fmt.Printf("Bad Message: %v\n", err)
             badMesgChannel <- message
         } else {
             fmt.Printf("asset ID:: %q\n", asset.ActivityId)
@@ -86,20 +73,30 @@ func main() {
     }
 }
 
-func findQueueUrl(err error, svc *sqs.SQS, queueName string) *sqs.GetQueueUrlOutput {
+func findQueueUrl(svc *sqs.SQS, queueName string) *sqs.GetQueueUrlOutput {
     queueURL, err := svc.GetQueueUrl(&sqs.GetQueueUrlInput{
         QueueName: aws.String(queueName),
     })
+    if err != nil {
+        if aerr, ok := err.(awserr.Error); ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
+            exitErrorf("Unable to find queue %q.", queueName)
+        }
+        exitErrorf("Unable to queue %q, %v.", queueName, err)
+    }
     return queueURL
 }
 
-func setupSession() (error, *sqs.SQS) {
+func setupSession() *sqs.SQS {
     sess, err := session.NewSession(&aws.Config{
         Region: aws.String("eu-west-1")},
     )
+    if err != nil {
+        exitErrorf("Unable to setup Session")
+    }
+
     // Create a SQS service client.
     svc := sqs.New(sess)
-    return err, svc
+    return svc
 }
 
 func exitErrorf(msg string, args ...interface{}) {
