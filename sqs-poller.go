@@ -54,18 +54,18 @@ func main() {
     inputQueueURL := findQueueUrl(svc, inputName)
     badMesgQueueURL := findQueueUrl(svc, badMesgName)
 
-    inputChannel := make(chan string)
-    badMesgChannel := make(chan string)
-    go messagePoller(svc, inputQueueURL, inputChannel)
-    go messageSender(svc, badMesgQueueURL, badMesgChannel)
+    inputQueue := make(chan string)
+    badMesgQueue := make(chan string)
+    go messagePoller(svc, inputQueueURL, inputQueue)
+    go messageSender(svc, badMesgQueueURL, badMesgQueue)
 
     for {
-        var message = <-inputChannel
+        var message = <-inputQueue
         var asset SimpleAsset
         err := xml.Unmarshal([]byte(message), &asset)
         if err != nil {
             fmt.Printf("Bad Message: %v\n", err)
-            badMesgChannel <- message
+            badMesgQueue <- message
         } else {
             fmt.Printf("asset ID:: %q\n", asset.ActivityId)
             fmt.Printf("asset location:: %q\n", asset.Uri.Path)
