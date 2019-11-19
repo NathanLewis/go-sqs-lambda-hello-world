@@ -3,31 +3,28 @@
 package main
 
 import (
-    "encoding/xml"
     "flag"
     "fmt"
-    "os"
-
     "github.com/aws/aws-sdk-go/aws"
     "github.com/aws/aws-sdk-go/aws/session"
     "github.com/aws/aws-sdk-go/service/sqs"
+    "os"
 )
+
+
 
 // Receive message from Queue with long polling enabled.
 //
 // Usage:
 //    go run sqs_handler.go -n queue_name -t timeout
 func main() {
+    /*
     type Uri struct {
         XMLName xml.Name    `xml:"uri"`
         Path    string      `xml:",innerxml"`
     }
+    */
 
-    type SimpleAsset struct {
-        XMLName    xml.Name `xml:"simpleAsset"`
-        ActivityId string   `xml:"activityId,attr"` // notice the capitalized field inputName here and the `xml:"app_name,attr"`
-        Uri        Uri
-    }
 
     var inputName, badMesgName string
     var timeout int64
@@ -61,14 +58,13 @@ func main() {
 
     for {
         var message = <-inputQueue
-        var asset SimpleAsset
-        err := xml.Unmarshal([]byte(message), &asset)
+        var asset Asset
+        err := asset.readFromString(message)
         if err != nil {
             fmt.Printf("Bad Message: %v\n", err)
             badMesgQueue <- message
         } else {
-            fmt.Printf("asset ID:: %q\n", asset.ActivityId)
-            fmt.Printf("asset location:: %q\n", asset.Uri.Path)
+            asset.printFields()
         }
     }
 }
