@@ -3,6 +3,7 @@
 package main
 
 import (
+    "encoding/json"
     "flag"
     "fmt"
     "github.com/aws/aws-sdk-go/aws"
@@ -18,13 +19,6 @@ import (
 // Usage:
 //    go run sqs_handler.go -n queue_name -t timeout
 func main() {
-    /*
-    type Uri struct {
-        XMLName xml.Name    `xml:"uri"`
-        Path    string      `xml:",innerxml"`
-    }
-    */
-
 
     var inputName, badMesgName string
     var timeout int64
@@ -35,11 +29,11 @@ func main() {
 
     if len(inputName) == 0 {
         flag.PrintDefaults()
-        exitErrorf("Input Queue Name required")
+        exitErrorf("Input Queue Name or Arn required")
     }
     if len(badMesgName) == 0 {
         flag.PrintDefaults()
-        exitErrorf("Bad Message Queue Name required")
+        exitErrorf("Bad Message Queue Name or Arn required")
     }
 
     // Initialize a session in eu-west-1 that the SDK will use to load
@@ -49,7 +43,9 @@ func main() {
     // API call to retrieve the URL. This is needed for receiving messages
     // from the queue.
     inputQueueURL := findQueueUrl(svc, inputName)
+    fmt.Printf("Found %s\n", inputQueueURL)
     badMesgQueueURL := findQueueUrl(svc, badMesgName)
+    fmt.Printf("Found %s\n", badMesgQueueURL)
 
     inputQueue := make(chan string)
     badMesgQueue := make(chan string)
@@ -65,6 +61,12 @@ func main() {
             badMesgQueue <- message
         } else {
             asset.printFields()
+            result, err := json.Marshal(asset.toMap())
+            if nil != err {
+                fmt.Println("Error marshalling to JSON", err)
+            } else {
+                fmt.Println(string(result))
+            }
         }
     }
 }

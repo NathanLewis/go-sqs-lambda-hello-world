@@ -5,11 +5,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"strings"
 )
 
-func messagePoller(svc *sqs.SQS, resultURL *sqs.GetQueueUrlOutput, messages chan<- string) {
+func messagePoller(svc *sqs.SQS, url *sqs.GetQueueUrlOutput, messages chan<- string) {
 	for {
-		message := getMessage(svc, resultURL)
+		message := getMessage(svc, url)
 		if 0 == len(message) {
 			continue
 		}
@@ -17,10 +18,10 @@ func messagePoller(svc *sqs.SQS, resultURL *sqs.GetQueueUrlOutput, messages chan
 	}
 }
 
-func getMessage(svc *sqs.SQS, resultURL *sqs.GetQueueUrlOutput) string {
+func getMessage(svc *sqs.SQS, url *sqs.GetQueueUrlOutput) string {
 	// Receive a message from the SQS queue with long polling enabled.
 	result, _ := svc.ReceiveMessage(&sqs.ReceiveMessageInput{
-		QueueUrl: resultURL.QueueUrl,
+		QueueUrl: url.QueueUrl,
 		AttributeNames: aws.StringSlice([]string{
 			"SentTimestamp",
 		}),
@@ -37,7 +38,7 @@ func getMessage(svc *sqs.SQS, resultURL *sqs.GetQueueUrlOutput) string {
 		var message = *(result.Messages[0]).Body
 		fmt.Println(message)
 		_, err := svc.DeleteMessage(&sqs.DeleteMessageInput{
-			QueueUrl:      resultURL.QueueUrl,
+			QueueUrl:      url.QueueUrl,
 			ReceiptHandle: result.Messages[0].ReceiptHandle,
 		})
 		if err != nil {
@@ -48,21 +49,32 @@ func getMessage(svc *sqs.SQS, resultURL *sqs.GetQueueUrlOutput) string {
 	return ""
 }
 
-func messageSender(svc *sqs.SQS, badMesgQueueURL *sqs.GetQueueUrlOutput, messages chan string) {
+func messageSender(svc *sqs.SQS, url *sqs.GetQueueUrlOutput, messages chan string) {
 	for {
 		message := <- messages
 		_, err := svc.SendMessage(&sqs.SendMessageInput{
 			DelaySeconds: aws.Int64(0),
 			MessageBody:  aws.String(message),
-			QueueUrl:     badMesgQueueURL.QueueUrl,
+			QueueUrl:     url.QueueUrl,
 		})
 		if err != nil {
-			fmt.Printf("Unable to send to Queue %s\n", badMesgQueueURL.QueueUrl)
+			fmt.Printf("Unable to send to Queue %s\n", url.QueueUrl)
 		}
 	}
 }
 
 func findQueueUrl(svc *sqs.SQS, queueName string) *sqs.GetQueueUrlOutput {
+	// I would have thought that if it began with https I could just return it
+	if strings.HasPrefix(queueName, "https:") {
+		var queueUrl sqs.GetQueueUrlOutput
+		queueUrl.SetQueueUrl(queueName)
+		return &queueUrl
+	}
+	/**/
+	if strings.HasPrefix(queueName,"arn:") {
+		slice := strings.SplitN(queueName, ":", -1)
+		queueName = slice[len(slice)-1:][0]
+	}
 	queueURL, err := svc.GetQueueUrl(&sqs.GetQueueUrlInput{
 		QueueName: aws.String(queueName),
 	})
