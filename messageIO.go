@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/sns"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"strings"
 )
@@ -49,7 +51,7 @@ func getMessage(svc *sqs.SQS, url *sqs.GetQueueUrlOutput) string {
 	return ""
 }
 
-func messageSender(svc *sqs.SQS, url *sqs.GetQueueUrlOutput, messages chan string) {
+func sqsSender(svc *sqs.SQS, url *sqs.GetQueueUrlOutput, messages chan string) {
 	for {
 		message := <- messages
 		_, err := svc.SendMessage(&sqs.SendMessageInput{
@@ -62,6 +64,23 @@ func messageSender(svc *sqs.SQS, url *sqs.GetQueueUrlOutput, messages chan strin
 		}
 	}
 }
+
+
+func snsSender(sess *session.Session, topicArn string, messages <-chan string) {
+	client := sns.New(sess)
+	for {
+		message := <- messages
+		result, err := client.Publish(
+			&sns.PublishInput{Message: aws.String(message),
+				TopicArn: aws.String(topicArn),
+			})
+		if err != nil {
+			fmt.Println("Publish error:", err)
+		}
+		fmt.Println(result)
+	}
+}
+
 
 func findQueueUrl(svc *sqs.SQS, queueName string) *sqs.GetQueueUrlOutput {
 	// I would have thought that if it began with https I could just return it
@@ -85,5 +104,18 @@ func findQueueUrl(svc *sqs.SQS, queueName string) *sqs.GetQueueUrlOutput {
 		exitErrorf("Unable to queue %q, %v.", queueName, err)
 	}
 	return queueURL
+}
+
+func setupSession() (*sqs.SQS, *session.Session) {
+	sess, err := session.NewSession(&aws.Config{
+		Region: aws.String("eu-west-1")},
+	)
+	if err != nil {
+		exitErrorf("Unable to setup Session")
+	}
+
+	// Create a SQS service client.
+	svc := sqs.New(sess)
+	return svc, sess
 }
 
