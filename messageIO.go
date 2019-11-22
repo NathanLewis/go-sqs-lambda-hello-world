@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -66,18 +67,27 @@ func sqsSender(svc *sqs.SQS, url *sqs.GetQueueUrlOutput, messages chan string) {
 }
 
 
-func snsSender(sess *session.Session, topicArn string, messages <-chan string) {
+func snsSender(sess *session.Session, topicArn string, snsMessages <-chan map[string]interface{}) {
 	client := sns.New(sess)
 	for {
-		message := <- messages
-		result, err := client.Publish(
-			&sns.PublishInput{Message: aws.String(message),
-				TopicArn: aws.String(topicArn),
-			})
-		if err != nil {
-			fmt.Println("Publish error:", err)
+		snsMesgMap := <-snsMessages
+		result, err := json.Marshal(snsMesgMap)
+		if nil != err {
+			fmt.Println("Error marshalling to JSON", err)
+			//fmt.Println(message)
+		} else {
+			message := string(result)
+			fmt.Println(message)
+
+			_, err = client.Publish(
+				&sns.PublishInput{Message: aws.String(message),
+					TopicArn: aws.String(topicArn),
+				})
+			if err != nil {
+				fmt.Println("Publish error:", err)
+			}
 		}
-		fmt.Println(result)
+		//fmt.Println(result)
 	}
 }
 

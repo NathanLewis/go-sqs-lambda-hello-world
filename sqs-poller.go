@@ -3,11 +3,11 @@
 package main
 
 import (
-    "encoding/json"
     "flag"
     "fmt"
-    "time"
     "os"
+    "strconv"
+    "time"
 )
 
 
@@ -47,13 +47,13 @@ func main() {
     // API call to retrieve the URL. This is needed for receiving messages
     // from the queue.
     inputQueueURL := findQueueUrl(sqs, inputName)
-    fmt.Printf("Found %s\n", inputQueueURL)
+    //fmt.Printf("Found %s\n", inputQueueURL)
     badMesgQueueURL := findQueueUrl(sqs, badMesgName)
-    fmt.Printf("Found %s\n", badMesgQueueURL)
+    //fmt.Printf("Found %s\n", badMesgQueueURL)
 
     inputQueueChannel := make(chan string)
     badMesgQueueChannel := make(chan string)
-    snsChannel := make(chan string)
+    snsChannel := make(chan map[string]interface{})
     go messagePoller(sqs, inputQueueURL, inputQueueChannel)
     go sqsSender(sqs, badMesgQueueURL, badMesgQueueChannel)
     go snsSender(sess, snsTopicArn, snsChannel)
@@ -63,23 +63,17 @@ func main() {
         var asset Asset
         err := asset.readFromString(message)
         if err != nil {
+            // TODO notify on bad message too
             fmt.Printf("Bad Message: %v\n", err)
             badMesgQueueChannel <- message
         } else {
-            asset.printFields()
+            //asset.printFields()
             snsMesgMap := asset.toMap()
             // Add whatever fields you want / need to the sns message
             snsMesgMap["event_name"] = "go.sqs.message.status.ok"
-            snsMesgMap["event_timestamp"] = string(int64(time.Now().Unix()))
-            result, err := json.Marshal(snsMesgMap)
-            if nil != err {
-                fmt.Println("Error marshalling to JSON", err)
-                fmt.Println(message)
-            } else {
-                sresult := string(result)
-                fmt.Println(sresult)
-                snsChannel <- sresult
-            }
+            snsMesgMap["event_timestamp"] = strconv.FormatInt(int64(time.Now().Unix()), 10)
+
+            snsChannel <- snsMesgMap
         }
     }
 }
