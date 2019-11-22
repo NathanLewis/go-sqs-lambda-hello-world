@@ -12,7 +12,7 @@ import (
 
 
 
-// Receive message from Queue with long polling enabled.
+// Receive messages from Queue.
 //
 // Usage:
 //    go run sqs_handler.go -n queue_name -t timeout
@@ -22,7 +22,7 @@ func main() {
     var timeout int64
     flag.StringVar(&inputName, "n", "", "Input Queue inputName")
     flag.StringVar(&badMesgName, "b", "", "Bad Message Queue inputName")
-    flag.StringVar(&snsTopicArn, "i", "", "Ispy Topic Arn")
+    flag.StringVar(&snsTopicArn, "i", "", "Sns Topic Arn")
     flag.Int64Var(&timeout, "t", 20, "(Optional) Timeout in seconds for long polling")
     flag.Parse()
 
@@ -61,20 +61,22 @@ func main() {
     for {
         var message = <-inputQueueChannel
         var asset Asset
+        var snsMesgMap map[string]interface{}
         err := asset.readFromString(message)
         if err != nil {
-            // TODO notify on bad message too
-            fmt.Printf("Bad Message: %v\n", err)
+            fmt.Printf("Bad Message: %s\n", message)
             badMesgQueueChannel <- message
+            snsMesgMap = make(map[string]interface{})
+            snsMesgMap["event_name"] = "go.sqs.message.status.badmessage"
+            snsMesgMap["bad_message"] = message
         } else {
-            //asset.printFields()
-            snsMesgMap := asset.toMap()
-            // Add whatever fields you want / need to the sns message
+            snsMesgMap = asset.toMap()
             snsMesgMap["event_name"] = "go.sqs.message.status.ok"
-            snsMesgMap["event_timestamp"] = strconv.FormatInt(int64(time.Now().Unix()), 10)
-
-            snsChannel <- snsMesgMap
         }
+        // Add whatever fields you want / need to the sns message
+        snsMesgMap["event_timestamp"] = strconv.FormatInt(int64(time.Now().Unix()), 10)
+
+        snsChannel <- snsMesgMap
     }
 }
 
