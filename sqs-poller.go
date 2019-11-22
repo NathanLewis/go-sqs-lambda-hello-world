@@ -63,15 +63,15 @@ func main() {
         var asset Asset
         var snsMesgMap map[string]interface{}
         err := asset.readFromString(message)
-        if err != nil {
+        if err == nil {
+            snsMesgMap = asset.toMap()
+            snsMesgMap["event_name"] = "go.sqs.message.status.ok"
+        } else {
             fmt.Printf("Bad Message: %s\n", message)
             badMesgQueueChannel <- message
             snsMesgMap = make(map[string]interface{})
             snsMesgMap["event_name"] = "go.sqs.message.status.badmessage"
             snsMesgMap["bad_message"] = message
-        } else {
-            snsMesgMap = asset.toMap()
-            snsMesgMap["event_name"] = "go.sqs.message.status.ok"
         }
         // Add whatever fields you want / need to the sns message
         snsMesgMap["event_timestamp"] = strconv.FormatInt(int64(time.Now().Unix()), 10)

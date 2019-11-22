@@ -61,7 +61,7 @@ func sqsSender(svc *sqs.SQS, url *sqs.GetQueueUrlOutput, messages chan string) {
 			QueueUrl:     url.QueueUrl,
 		})
 		if err != nil {
-			fmt.Printf("Unable to send to Queue %s\n", url.QueueUrl)
+			fmt.Printf("Unable to send to Queue %s\n", *url.QueueUrl)
 		}
 	}
 }
