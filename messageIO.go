@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sns"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"os"
 	"strings"
 )
 
@@ -52,16 +53,16 @@ func getMessage(svc *sqs.SQS, url *sqs.GetQueueUrlOutput) string {
 	return ""
 }
 
-func sqsSender(svc *sqs.SQS, url *sqs.GetQueueUrlOutput, messages chan string) {
+func sqsSender(svc *sqs.SQS, url *string, messages chan string) {
 	for {
 		message := <- messages
 		_, err := svc.SendMessage(&sqs.SendMessageInput{
 			DelaySeconds: aws.Int64(0),
 			MessageBody:  aws.String(message),
-			QueueUrl:     url.QueueUrl,
+			QueueUrl:     url,
 		})
 		if err != nil {
-			fmt.Printf("Unable to send to Queue %s\n", *url.QueueUrl)
+			fmt.Printf("Unable to send to Queue %s\n", *url)
 		}
 	}
 }
@@ -129,3 +130,7 @@ func setupSession() (*sqs.SQS, *session.Session) {
 	return svc, sess
 }
 
+func exitErrorf(msg string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, msg+"\n", args...)
+	os.Exit(1)
+}

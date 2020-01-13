@@ -1,7 +1,7 @@
 clean:
 		rm -rf ./venv
 build: 
-		GOOS=linux GOARCH=amd64 go build -o main cmd/lambdaapp/lambdapp.go
+		GOOS=linux GOARCH=amd64 go build -o main *.go
 		zip main.zip main
 
 package:
